@@ -130,47 +130,38 @@ impl App {
         self.error_str.clear();
     }
 
-    pub fn copy(&mut self) {
-        let src_path: PathBuf;
-        let mut dest_path: PathBuf;
-
-        if self.cur_panel == ActivePanel::Left {
-            // Copy from left to right panel
-            src_path = self.get_cur_panel().get_cur_obj();
-            dest_path = self.get_right_panel().get_path();
-        } else {
-            // Copy from right to left panel
-            src_path = self.get_cur_panel().get_cur_obj();
-            dest_path = self.get_left_panel().get_path();
+    pub fn copy_objects(&mut self) {
+        if let Err(error) = self.copy() {
+            self.error_str = error;
+            return;
         }
 
-        let file_name: &OsStr = src_path.file_name().unwrap();
-        dest_path.push(file_name);
+        self.refresh();
+    }
+
+    pub fn move_objects(&mut self) {
+        if let Err(error) = self.copy() {
+            self.error_str = error;
+            return;
+        }
+
+        let src_path: PathBuf = self.get_cur_panel().get_cur_obj();
 
         if src_path.is_dir() {
-            if let Err(error) = copy_recursively(&src_path, &dest_path) {
-                self.error_str = format![
-                    "Failed to copy {} to {} [Error: {}]",
-                    src_path.display(),
-                    dest_path.display(),
-                    error
-                ];
+            if let Err(error) = fs::remove_dir_all(&src_path) {
+                self.error_str =
+                    format!["Failed to delete {} [Error: {}]", src_path.display(), error];
                 return;
             }
         } else {
-            if let Err(error) = fs::copy(&src_path, &dest_path) {
-                self.error_str = format![
-                    "Failed to copy {} to {} [Error: {}]",
-                    src_path.display(),
-                    dest_path.display(),
-                    error
-                ];
+            if let Err(error) = fs::remove_file(&src_path) {
+                self.error_str =
+                    format!["Failed to delete {} [Error: {}]", src_path.display(), error];
                 return;
             }
         }
 
-        self.get_left_panel().update_items();
-        self.get_right_panel().update_items();
+        self.refresh();
     }
 
     pub fn refresh(&mut self) {
@@ -178,7 +169,7 @@ impl App {
         self.get_right_panel().update_items();
     }
 
-    pub fn delete(&mut self) {
+    pub fn delete_objects(&mut self) {
         let cur_obj: PathBuf = self.get_cur_panel().get_cur_obj();
 
         if cur_obj.is_dir() {
@@ -231,16 +222,20 @@ impl App {
         if self.help_popup {
             let table: Table = Table::new(vec![
                 Row::new(vec!["F1", "Show this help"]),
+                Row::new(vec!["F2", "Copy"]),
+                Row::new(vec!["F3", "Move"]),
+                Row::new(vec!["F5", "Refresh"]),
                 Row::new(vec!["F12", "Terminate sfmanager"]),
-                Row::new(vec!["Arrow down", "Go one entry down"]),
                 Row::new(vec!["Arrow up", "Go one entry up"]),
+                Row::new(vec!["Arrow down", "Go one entry down"]),
                 Row::new(vec!["Home", "Go to the first entry"]),
                 Row::new(vec!["End", "Go to the last entry"]),
-                Row::new(vec!["Arrow right", "Go into folder"]),
-                Row::new(vec!["Enter", "Go into folder"]),
-                Row::new(vec!["Arrow left", "Go out of folder"]),
+                Row::new(vec!["Arrow right", "Enter folder"]),
+                Row::new(vec!["Enter", "Enter folder"]),
+                Row::new(vec!["Arrow left", "Leave folder"]),
                 Row::new(vec!["Backspace", "Delete last char from search string"]),
                 Row::new(vec!["Tab", "Switch current panel"]),
+                Row::new(vec!["Delete", "Delete"]),
                 Row::new(vec!["Esc", "Close this help or clear search string"]),
             ])
             .style(Style::default().fg(Color::White))
@@ -282,6 +277,7 @@ impl App {
                 format!["F1 help"],
             ]),
             Row::new(vec![format![""], format!["F2 copy"]]),
+            Row::new(vec![format![""], format!["F3 move"]]),
             Row::new(vec![format![""], format!["F5 refresh"]]),
             Row::new(vec![format![""], format!["F12 quit"]]),
         ])
@@ -306,6 +302,46 @@ impl App {
         } else {
             return &mut self.right_panel;
         }
+    }
+
+    fn copy(&mut self) -> Result<(), String> {
+        let src_path: PathBuf;
+        let mut dest_path: PathBuf;
+
+        src_path = self.get_cur_panel().get_cur_obj();
+
+        if self.cur_panel == ActivePanel::Left {
+            // Copy from left to right panel
+            dest_path = self.get_right_panel().get_path();
+        } else {
+            // Copy from right to left panel
+            dest_path = self.get_left_panel().get_path();
+        }
+
+        let file_name: &OsStr = src_path.file_name().unwrap();
+        dest_path.push(file_name);
+
+        if src_path.is_dir() {
+            if let Err(error) = copy_recursively(&src_path, &dest_path) {
+                return Err(format![
+                    "Failed to copy {} to {} [Error: {}]",
+                    src_path.display(),
+                    dest_path.display(),
+                    error
+                ]);
+            }
+        } else {
+            if let Err(error) = fs::copy(&src_path, &dest_path) {
+                return Err(format![
+                    "Failed to copy {} to {} [Error: {}]",
+                    src_path.display(),
+                    dest_path.display(),
+                    error
+                ]);
+            }
+        }
+
+        return Ok(());
     }
 }
 

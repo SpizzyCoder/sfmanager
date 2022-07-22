@@ -52,11 +52,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
         if let Event::Key(key) = event::read()? {
             match key.code {
                 KeyCode::F(1) => app.open_help_popup(),
-                KeyCode::F(2) => app.copy(),
+                KeyCode::F(2) => app.copy_objects(),
+                KeyCode::F(3) => app.move_objects(),
                 KeyCode::F(5) => app.refresh(),
                 KeyCode::F(12) => return Ok(()),
-                KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
+                KeyCode::Down => app.next(),
                 KeyCode::Home => app.begin(),
                 KeyCode::End => app.end(),
                 KeyCode::Right => app.open_dir(),
@@ -70,7 +71,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 KeyCode::Left => app.leave_dir(),
                 KeyCode::Backspace => app.pop_char_from_search_str(),
                 KeyCode::Tab => app.switch_active_panel(),
-                KeyCode::Delete => app.delete(),
+                KeyCode::Delete => app.delete_objects(),
                 KeyCode::Char(x @ ' '..='~') => app.jump_to_first_matching(x),
                 KeyCode::Esc => {
                     if app.is_error_popup() {
