@@ -31,28 +31,14 @@ pub struct App {
     right_panel: Panel,
     help_popup: bool,
     error_str: String,
+    search_str: String,
 }
 
 impl App {
-    fn get_left_panel(&mut self) -> &mut Panel {
-        return &mut self.left_panel;
-    }
-
-    fn get_right_panel(&mut self) -> &mut Panel {
-        return &mut self.right_panel;
-    }
-
-    fn get_cur_panel(&mut self) -> &mut Panel {
-        if self.cur_panel == ActivePanel::Left {
-            return &mut self.left_panel;
-        } else {
-            return &mut self.right_panel;
-        }
-    }
-
     pub fn new() -> Self {
         let start_path: PathBuf;
 
+        // Determine the home path
         if cfg![windows] {
             start_path = PathBuf::from(format![
                 "{}{}",
@@ -69,6 +55,7 @@ impl App {
             right_panel: Panel::new(&start_path),
             help_popup: false,
             error_str: String::new(),
+            search_str: String::new(),
         };
     }
 
@@ -78,12 +65,12 @@ impl App {
 
     pub fn open_dir(&mut self) {
         self.get_cur_panel().open_dir();
-        self.get_cur_panel().clear_search_str();
+        self.search_str.clear();
     }
 
     pub fn leave_dir(&mut self) {
         self.get_cur_panel().leave_dir();
-        self.get_cur_panel().clear_search_str();
+        self.search_str.clear();
     }
 
     pub fn next(&mut self) {
@@ -108,19 +95,23 @@ impl App {
         } else {
             self.cur_panel = ActivePanel::Left;
         }
+        self.search_str.clear();
     }
 
     pub fn jump_to_first_matching(&mut self, ch: char) {
-        self.get_cur_panel().push_char_to_search_str(ch);
-        self.get_cur_panel().jump_to_first_matching();
+        self.search_str.push(ch);
+
+        let search_str_clone: String = self.search_str.clone();
+        self.get_cur_panel()
+            .jump_to_first_matching(&search_str_clone);
     }
 
     pub fn clear_search_str(&mut self) {
-        self.get_cur_panel().clear_search_str();
+        self.search_str.clear();
     }
 
     pub fn pop_char_from_search_str(&mut self) {
-        self.get_cur_panel().pop_char_from_search_str();
+        self.search_str.pop();
     }
 
     pub fn open_help_popup(&mut self) {
@@ -287,10 +278,7 @@ impl App {
 
         let table: Table = Table::new(vec![
             Row::new(vec![
-                format![
-                    "Search string: {}",
-                    self.get_cur_panel().get_search_string()
-                ],
+                format!["Search string: {}", self.search_str],
                 format!["F1 help"],
             ]),
             Row::new(vec![format![""], format!["F2 copy"]]),
@@ -302,6 +290,22 @@ impl App {
         .widths(&[Constraint::Percentage(50), Constraint::Percentage(50)]);
 
         f.render_widget(table, ui_chunks[1]);
+    }
+
+    fn get_left_panel(&mut self) -> &mut Panel {
+        return &mut self.left_panel;
+    }
+
+    fn get_right_panel(&mut self) -> &mut Panel {
+        return &mut self.right_panel;
+    }
+
+    fn get_cur_panel(&mut self) -> &mut Panel {
+        if self.cur_panel == ActivePanel::Left {
+            return &mut self.left_panel;
+        } else {
+            return &mut self.right_panel;
+        }
     }
 }
 

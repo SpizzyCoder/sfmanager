@@ -19,7 +19,6 @@ pub struct Panel {
     path: PathBuf,
     selection_history: Vec<usize>,
     items: Vec<PathBuf>,
-    search_str: String,
 }
 
 impl Panel {
@@ -29,15 +28,10 @@ impl Panel {
             path: path.to_path_buf(),
             selection_history: Vec::new(),
             items: Self::gen_items(path),
-            search_str: String::new(),
         };
 
         panel.begin();
         return panel;
-    }
-
-    pub fn get_search_string(&self) -> String {
-        return self.search_str.clone();
     }
 
     pub fn get_cur_obj(&self) -> PathBuf {
@@ -124,23 +118,11 @@ impl Panel {
         self.state.select(Some(self.items.len() - 1))
     }
 
-    pub fn push_char_to_search_str(&mut self, ch: char) {
-        self.search_str.push(ch);
-    }
-
-    pub fn pop_char_from_search_str(&mut self) {
-        self.search_str.pop();
-    }
-
-    pub fn clear_search_str(&mut self) {
-        self.search_str.clear();
-    }
-
-    pub fn jump_to_first_matching(&mut self) {
+    pub fn jump_to_first_matching(&mut self, search_str: &str) {
         for (i, v) in self.items.iter().enumerate() {
             let path_as_str: &str = v.file_name().unwrap().to_str().unwrap();
 
-            if path_as_str.contains(&self.search_str) {
+            if path_as_str.contains(search_str) {
                 self.state.select(Some(i));
                 return;
             }
