@@ -1,16 +1,15 @@
+use crate::panel::Panel;
+use crate::popup::Popup;
 use crate::ACTIVE_COLOR;
 use crate::INACTIVE_COLOR;
 
 use tui::{
     backend::Backend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
-    text::{Span, Spans},
-    widgets::{Block, Borders, Clear, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, Row, Table},
     Frame,
 };
-
-use crate::panel::Panel;
 
 use std::{
     env,
@@ -29,9 +28,8 @@ pub struct App {
     cur_panel: ActivePanel,
     left_panel: Panel,
     right_panel: Panel,
-    help_popup: bool,
-    error_str: String,
     search_str: String,
+    popup: Option<Popup>,
 }
 
 impl App {
@@ -53,14 +51,13 @@ impl App {
             cur_panel: ActivePanel::Left,
             left_panel: Panel::new(&start_path),
             right_panel: Panel::new(&start_path),
-            help_popup: false,
-            error_str: String::new(),
             search_str: String::new(),
+            popup: None,
         };
     }
 
-    pub fn is_help_popup(&self) -> bool {
-        return self.help_popup;
+    pub fn is_popup(&self) -> bool {
+        return self.popup.is_some();
     }
 
     pub fn open_dir(&mut self) {
@@ -115,24 +112,41 @@ impl App {
     }
 
     pub fn open_help_popup(&mut self) {
-        self.help_popup = true;
+        self.popup = Some(Popup::new(
+            "Help",
+            concat![
+                "F1 - Show this help\n",
+                "F2 - Copy\n",
+                "F3 - Move\n",
+                "F5 - Refresh\n",
+                "F12 - Terminate sfmanager\n", // TODO -> use env
+                "Arrow up - Go one entry up\n",
+                "Arrow down - Go one entry down\n",
+                "Home - Go to the first entry\n",
+                "End - Go to the last entry\n",
+                "Arrow right - Enter folder\n",
+                "Enter - Enter folder\n",
+                "Arrow left - Leave folder\n",
+                "Backspace - Delete last char from search string\n",
+                "Tab - Switch current panel\n",
+                "Delete - Delete\n",
+                "Esc - Clear search string\n",
+            ],
+            None,
+        ));
     }
 
-    pub fn close_help_popup(&mut self) {
-        self.help_popup = false;
-    }
-
-    pub fn is_error_popup(&self) -> bool {
-        return !self.error_str.is_empty();
-    }
-
-    pub fn close_error_popup(&mut self) {
-        self.error_str.clear();
+    pub fn close_popup(&mut self) {
+        self.popup = None;
     }
 
     pub fn copy_objects(&mut self) {
         if let Err(error) = self.copy() {
-            self.error_str = error;
+            self.popup = Some(Popup::new(
+                "Error",
+                &format!["{}", error],
+                Some(Style::default().fg(Color::Red)),
+            ));
             return;
         }
 
@@ -141,7 +155,11 @@ impl App {
 
     pub fn move_objects(&mut self) {
         if let Err(error) = self.copy() {
-            self.error_str = error;
+            self.popup = Some(Popup::new(
+                "Error",
+                &format!["{}", error],
+                Some(Style::default().fg(Color::Red)),
+            ));
             return;
         }
 
@@ -149,14 +167,20 @@ impl App {
 
         if src_path.is_dir() {
             if let Err(error) = fs::remove_dir_all(&src_path) {
-                self.error_str =
-                    format!["Failed to delete {} [Error: {}]", src_path.display(), error];
+                self.popup = Some(Popup::new(
+                    "Error",
+                    &format!["Failed to delete {} [Error: {}]", src_path.display(), error],
+                    Some(Style::default().fg(Color::Red)),
+                ));
                 return;
             }
         } else {
             if let Err(error) = fs::remove_file(&src_path) {
-                self.error_str =
-                    format!["Failed to delete {} [Error: {}]", src_path.display(), error];
+                self.popup = Some(Popup::new(
+                    "Error",
+                    &format!["Failed to delete {} [Error: {}]", src_path.display(), error],
+                    Some(Style::default().fg(Color::Red)),
+                ));
                 return;
             }
         }
@@ -174,17 +198,24 @@ impl App {
 
         if cur_obj.is_dir() {
             if let Err(error) = fs::remove_dir_all(&cur_obj) {
-                self.error_str = format![
-                    "Failed to remove {} recursively [Error: {}]",
-                    cur_obj.display(),
-                    error
-                ];
+                self.popup = Some(Popup::new(
+                    "Error",
+                    &format![
+                        "Failed to remove {} recursively [Error: {}]",
+                        cur_obj.display(),
+                        error
+                    ],
+                    Some(Style::default().fg(Color::Red)),
+                ));
                 return;
             }
         } else {
             if let Err(error) = fs::remove_file(&cur_obj) {
-                self.error_str =
-                    format!["Failed to remove {} [Error: {}]", cur_obj.display(), error];
+                self.popup = Some(Popup::new(
+                    "Error",
+                    &format!["Failed to remove {} [Error: {}]", cur_obj.display(), error],
+                    Some(Style::default().fg(Color::Red)),
+                ));
                 return;
             }
         }
@@ -193,57 +224,8 @@ impl App {
     }
 
     pub fn render<B: Backend>(&mut self, f: &mut Frame<B>) {
-        if !self.error_str.is_empty() {
-            let error_layout: Vec<Rect> = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .margin(15)
-                .split(f.size());
-
-            let text = vec![
-                Spans::from(Span::styled(
-                    &self.error_str,
-                    Style::default().fg(Color::Red),
-                )),
-                Spans::from(Span::raw("Press ENTER or ESC")),
-            ];
-
-            let error_msg: Paragraph = Paragraph::new(text)
-                .block(Block::default().title("Error").borders(Borders::ALL))
-                .style(Style::default().fg(Color::White).bg(Color::Black))
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-
-            f.render_widget(Clear, error_layout[0]);
-            f.render_widget(error_msg, error_layout[0]);
-            return;
-        }
-
-        if self.help_popup {
-            let table: Table = Table::new(vec![
-                Row::new(vec!["F1", "Show this help"]),
-                Row::new(vec!["F2", "Copy"]),
-                Row::new(vec!["F3", "Move"]),
-                Row::new(vec!["F5", "Refresh"]),
-                Row::new(vec!["F12", "Terminate sfmanager"]),
-                Row::new(vec!["Arrow up", "Go one entry up"]),
-                Row::new(vec!["Arrow down", "Go one entry down"]),
-                Row::new(vec!["Home", "Go to the first entry"]),
-                Row::new(vec!["End", "Go to the last entry"]),
-                Row::new(vec!["Arrow right", "Enter folder"]),
-                Row::new(vec!["Enter", "Enter folder"]),
-                Row::new(vec!["Arrow left", "Leave folder"]),
-                Row::new(vec!["Backspace", "Delete last char from search string"]),
-                Row::new(vec!["Tab", "Switch current panel"]),
-                Row::new(vec!["Delete", "Delete"]),
-                Row::new(vec!["Esc", "Close this help or clear search string"]),
-            ])
-            .style(Style::default().fg(Color::White))
-            .block(Block::default().title("Help").borders(Borders::ALL))
-            .widths(&[Constraint::Percentage(8), Constraint::Percentage(92)]);
-
-            f.render_widget(Clear, f.size());
-            f.render_widget(table, f.size());
+        if self.popup.is_some() {
+            self.popup.as_mut().unwrap().render(f);
             return;
         }
 

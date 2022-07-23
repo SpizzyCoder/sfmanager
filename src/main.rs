@@ -11,8 +11,9 @@ use tui::{
 };
 
 mod app;
-mod panel;
 use app::App;
+mod panel;
+mod popup;
 
 const ACTIVE_COLOR: Color = Color::LightGreen;
 const INACTIVE_COLOR: Color = Color::DarkGray;
@@ -62,8 +63,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 KeyCode::End => app.end(),
                 KeyCode::Right => app.open_dir(),
                 KeyCode::Enter => {
-                    if app.is_error_popup() {
-                        app.close_error_popup();
+                    if app.is_popup() {
+                        app.close_popup();
                     } else {
                         app.open_dir();
                     }
@@ -74,10 +75,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                 KeyCode::Delete => app.delete_objects(),
                 KeyCode::Char(x @ ' '..='~') => app.jump_to_first_matching(x),
                 KeyCode::Esc => {
-                    if app.is_error_popup() {
-                        app.close_error_popup();
-                    } else if app.is_help_popup() {
-                        app.close_help_popup();
+                    if app.is_popup() {
+                        app.close_popup();
                     } else {
                         app.clear_search_str();
                     }
