@@ -1,8 +1,3 @@
-use crate::panel::Panel;
-use crate::popup::Popup;
-use crate::ACTIVE_COLOR;
-use crate::INACTIVE_COLOR;
-
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,6 +12,14 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
 };
+
+mod popup;
+use popup::Popup;
+mod panel;
+use panel::Panel;
+
+const ACTIVE_COLOR: Color = Color::LightGreen;
+const INACTIVE_COLOR: Color = Color::DarkGray;
 
 #[derive(PartialEq)]
 pub enum ActivePanel {
@@ -150,7 +153,10 @@ impl App {
             return;
         }
 
-        self.refresh();
+        match self.cur_panel {
+            ActivePanel::Left => self.right_panel.update_items(),
+            ActivePanel::Right => self.left_panel.update_items(),
+        };
     }
 
     pub fn move_objects(&mut self) {
@@ -189,8 +195,8 @@ impl App {
     }
 
     pub fn refresh(&mut self) {
-        self.get_left_panel().update_items();
-        self.get_right_panel().update_items();
+        self.left_panel.update_items();
+        self.right_panel.update_items();
     }
 
     pub fn delete_objects(&mut self) {
@@ -270,14 +276,6 @@ impl App {
         f.render_widget(table, ui_chunks[1]);
     }
 
-    fn get_left_panel(&mut self) -> &mut Panel {
-        return &mut self.left_panel;
-    }
-
-    fn get_right_panel(&mut self) -> &mut Panel {
-        return &mut self.right_panel;
-    }
-
     fn get_cur_panel(&mut self) -> &mut Panel {
         if self.cur_panel == ActivePanel::Left {
             return &mut self.left_panel;
@@ -294,10 +292,10 @@ impl App {
 
         if self.cur_panel == ActivePanel::Left {
             // Copy from left to right panel
-            dest_path = self.get_right_panel().get_path();
+            dest_path = self.right_panel.get_path();
         } else {
             // Copy from right to left panel
-            dest_path = self.get_left_panel().get_path();
+            dest_path = self.left_panel.get_path();
         }
 
         let file_name: &OsStr = src_path.file_name().unwrap();
@@ -329,6 +327,7 @@ impl App {
 
 fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
     fs::create_dir_all(&destination)?;
+
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let filetype = entry.file_type()?;
@@ -338,5 +337,6 @@ fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> 
             fs::copy(entry.path(), destination.as_ref().join(entry.file_name()))?;
         }
     }
-    Ok(())
+
+    return Ok(());
 }

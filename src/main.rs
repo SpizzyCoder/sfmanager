@@ -6,17 +6,11 @@ use crossterm::{
 use std::{error::Error, io};
 use tui::{
     backend::{Backend, CrosstermBackend},
-    style::Color,
     Terminal,
 };
 
 mod app;
 use app::App;
-mod panel;
-mod popup;
-
-const ACTIVE_COLOR: Color = Color::LightGreen;
-const INACTIVE_COLOR: Color = Color::DarkGray;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Setup terminal
