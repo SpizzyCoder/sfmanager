@@ -27,7 +27,7 @@ impl Panel {
             state: ListState::default(),
             path: path.to_path_buf(),
             selection_history: Vec::new(),
-            items: Self::gen_items(path),
+            items: Self::get_items(path),
         };
 
         panel.begin();
@@ -157,10 +157,10 @@ impl Panel {
     }
 
     pub fn update_items(&mut self) {
-        self.items = Self::gen_items(&self.path);
+        self.items = Self::get_items(&self.path);
     }
 
-    fn gen_items(path: &Path) -> Vec<PathBuf> {
+    fn get_items(path: &Path) -> Vec<PathBuf> {
         let dir_iterator: ReadDir = match fs::read_dir(path) {
             Ok(iterator) => iterator,
             Err(_error) => {

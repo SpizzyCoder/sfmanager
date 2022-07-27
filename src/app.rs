@@ -11,6 +11,8 @@ use std::{
     ffi::OsStr,
     fs, io,
     path::{Path, PathBuf},
+    thread,
+    thread::JoinHandle,
 };
 
 mod popup;
@@ -33,6 +35,7 @@ pub struct App {
     right_panel: Panel,
     search_str: String,
     popup: Option<Popup>,
+    operations: Vec<JoinHandle<io::Result<()>>>,
 }
 
 impl App {
@@ -56,6 +59,7 @@ impl App {
             right_panel: Panel::new(&start_path),
             search_str: String::new(),
             popup: None,
+            operations: Vec::new(),
         };
     }
 
@@ -144,54 +148,39 @@ impl App {
     }
 
     pub fn copy_objects(&mut self) {
-        if let Err(error) = self.copy() {
-            self.popup = Some(Popup::new(
-                "Error",
-                &format!["{}", error],
-                Some(Style::default().fg(Color::Red)),
-            ));
-            return;
-        }
+        let src_dest_paths: (PathBuf, PathBuf) = self.get_copy_move_path();
+        let src_path = src_dest_paths.0;
+        let dest_path = src_dest_paths.1;
 
-        match self.cur_panel {
-            ActivePanel::Left => self.right_panel.update_items(),
-            ActivePanel::Right => self.left_panel.update_items(),
-        };
+        self.operations
+            .push(thread::spawn(move || -> io::Result<()> {
+                if src_path.is_dir() {
+                    copy_recursively(&src_path, &dest_path)?;
+                } else {
+                    fs::copy(&src_path, &dest_path)?;
+                }
+
+                return Ok(());
+            }));
     }
 
     pub fn move_objects(&mut self) {
-        if let Err(error) = self.copy() {
-            self.popup = Some(Popup::new(
-                "Error",
-                &format!["{}", error],
-                Some(Style::default().fg(Color::Red)),
-            ));
-            return;
-        }
+        let src_dest_paths: (PathBuf, PathBuf) = self.get_copy_move_path();
+        let src_path = src_dest_paths.0;
+        let dest_path = src_dest_paths.1;
 
-        let src_path: PathBuf = self.get_cur_panel().get_cur_obj();
+        self.operations
+            .push(thread::spawn(move || -> io::Result<()> {
+                if src_path.is_dir() {
+                    copy_recursively(&src_path, &dest_path)?;
+                    fs::remove_dir_all(&src_path)?;
+                } else {
+                    fs::copy(&src_path, &dest_path)?;
+                    fs::remove_file(&src_path)?;
+                }
 
-        if src_path.is_dir() {
-            if let Err(error) = fs::remove_dir_all(&src_path) {
-                self.popup = Some(Popup::new(
-                    "Error",
-                    &format!["Failed to delete {} [Error: {}]", src_path.display(), error],
-                    Some(Style::default().fg(Color::Red)),
-                ));
-                return;
-            }
-        } else {
-            if let Err(error) = fs::remove_file(&src_path) {
-                self.popup = Some(Popup::new(
-                    "Error",
-                    &format!["Failed to delete {} [Error: {}]", src_path.display(), error],
-                    Some(Style::default().fg(Color::Red)),
-                ));
-                return;
-            }
-        }
-
-        self.refresh();
+                return Ok(());
+            }));
     }
 
     pub fn refresh(&mut self) {
@@ -202,31 +191,16 @@ impl App {
     pub fn delete_objects(&mut self) {
         let cur_obj: PathBuf = self.get_cur_panel().get_cur_obj();
 
-        if cur_obj.is_dir() {
-            if let Err(error) = fs::remove_dir_all(&cur_obj) {
-                self.popup = Some(Popup::new(
-                    "Error",
-                    &format![
-                        "Failed to remove {} recursively [Error: {}]",
-                        cur_obj.display(),
-                        error
-                    ],
-                    Some(Style::default().fg(Color::Red)),
-                ));
-                return;
-            }
-        } else {
-            if let Err(error) = fs::remove_file(&cur_obj) {
-                self.popup = Some(Popup::new(
-                    "Error",
-                    &format!["Failed to remove {} [Error: {}]", cur_obj.display(), error],
-                    Some(Style::default().fg(Color::Red)),
-                ));
-                return;
-            }
-        }
+        self.operations
+            .push(thread::spawn(move || -> io::Result<()> {
+                if cur_obj.is_dir() {
+                    fs::remove_dir_all(&cur_obj)?;
+                } else {
+                    fs::remove_file(&cur_obj)?;
+                }
 
-        self.get_cur_panel().update_items();
+                return Ok(());
+            }));
     }
 
     pub fn render<B: Backend>(&mut self, f: &mut Frame<B>) {
@@ -264,7 +238,10 @@ impl App {
                 format!["Search string: {}", self.search_str],
                 format!["F1 help"],
             ]),
-            Row::new(vec![format![""], format!["F2 copy"]]),
+            Row::new(vec![
+                format!["Active operations: {}", self.operations.len()],
+                format!["F2 copy"],
+            ]),
             Row::new(vec![format![""], format!["F3 move"]]),
             Row::new(vec![format![""], format!["F5 refresh"]]),
             Row::new(vec![format![""], format!["F12 quit"]]),
@@ -276,15 +253,43 @@ impl App {
         f.render_widget(table, ui_chunks[1]);
     }
 
-    fn get_cur_panel(&mut self) -> &mut Panel {
-        if self.cur_panel == ActivePanel::Left {
-            return &mut self.left_panel;
-        } else {
-            return &mut self.right_panel;
+    pub fn thread_ctrl(&mut self) {
+        let mut finished_indexes: Vec<usize> = Vec::new();
+
+        for index in 0..self.operations.len() {
+            if self.operations[index].is_finished() {
+                finished_indexes.push(index);
+            }
         }
+
+        loop {
+            if finished_indexes.len() < 1 {
+                break;
+            }
+
+            let index: usize = finished_indexes.remove(0);
+            finished_indexes = finished_indexes.iter().map(|x| x - 1).collect();
+
+            let join_handle: JoinHandle<io::Result<()>> = self.operations.remove(index);
+            match join_handle.join().unwrap() {
+                Ok(_) => {}
+                Err(error) => {
+                    self.popup = Some(Popup::new(
+                        "Error",
+                        &error.to_string(),
+                        Some(Style::default().fg(Color::Red)),
+                    ));
+                    return;
+                }
+            };
+        }
+
+        self.refresh();
     }
 
-    fn copy(&mut self) -> Result<(), String> {
+    // 0 -> Source path
+    // 1 -> Destination path
+    fn get_copy_move_path(&mut self) -> (PathBuf, PathBuf) {
         let src_path: PathBuf;
         let mut dest_path: PathBuf;
 
@@ -301,27 +306,15 @@ impl App {
         let file_name: &OsStr = src_path.file_name().unwrap();
         dest_path.push(file_name);
 
-        if src_path.is_dir() {
-            if let Err(error) = copy_recursively(&src_path, &dest_path) {
-                return Err(format![
-                    "Failed to copy {} to {} [Error: {}]",
-                    src_path.display(),
-                    dest_path.display(),
-                    error
-                ]);
-            }
-        } else {
-            if let Err(error) = fs::copy(&src_path, &dest_path) {
-                return Err(format![
-                    "Failed to copy {} to {} [Error: {}]",
-                    src_path.display(),
-                    dest_path.display(),
-                    error
-                ]);
-            }
-        }
+        return (src_path, dest_path);
+    }
 
-        return Ok(());
+    fn get_cur_panel(&mut self) -> &mut Panel {
+        if self.cur_panel == ActivePanel::Left {
+            return &mut self.left_panel;
+        } else {
+            return &mut self.right_panel;
+        }
     }
 }
 

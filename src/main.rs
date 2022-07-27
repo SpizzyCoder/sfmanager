@@ -3,7 +3,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{error::Error, io};
+use std::{error::Error, io, time::Duration};
 use tui::{
     backend::{Backend, CrosstermBackend},
     Terminal,
@@ -42,7 +42,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
     loop {
+        app.thread_ctrl();
         terminal.draw(|f| app.render(f))?;
+
+        if !event::poll(Duration::from_millis(1000)).unwrap() {
+            continue;
+        }
 
         if let Event::Key(key) = event::read()? {
             match key.code {
