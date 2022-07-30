@@ -217,6 +217,8 @@ impl App {
             return;
         }
 
+        self.refresh();
+
         let ui_chunks: Vec<Rect> = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(85), Constraint::Percentage(15)].as_ref())
@@ -291,8 +293,6 @@ impl App {
                 }
             };
         }
-
-        self.refresh();
     }
 
     // 0 -> Source path
