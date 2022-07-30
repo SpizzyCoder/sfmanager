@@ -14,10 +14,10 @@ pub struct Popup {
 }
 
 impl Popup {
-    pub fn new(title: &str, text: &str, style: Option<Style>) -> Self {
+    pub fn new(title: impl ToString, text: impl ToString, style: Option<Style>) -> Self {
         return Popup {
-            title: title.to_owned(),
-            text: text.to_owned(),
+            title: title.to_string(),
+            text: text.to_string(),
             style: style,
         };
     }

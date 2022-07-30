@@ -194,7 +194,7 @@ impl App {
         if let Err(error) = trash::delete(&cur_obj) {
             self.popup = Some(Popup::new(
                 "Error",
-                &format!["Failed to delete {} [Error: {}]",cur_obj.display(),error],
+                format!["Failed to delete {} [Error: {}]",cur_obj.display(),error],
                 None
             ));
         }
@@ -284,7 +284,7 @@ impl App {
                 Err(error) => {
                     self.popup = Some(Popup::new(
                         "Error",
-                        &error.to_string(),
+                        error,
                         Some(Style::default().fg(Color::Red)),
                     ));
                     return;
