@@ -191,16 +191,24 @@ impl App {
     pub fn delete_objects(&mut self) {
         let cur_obj: PathBuf = self.get_cur_panel().get_cur_obj();
 
-        self.operations
-            .push(thread::spawn(move || -> io::Result<()> {
-                if cur_obj.is_dir() {
-                    fs::remove_dir_all(&cur_obj)?;
-                } else {
-                    fs::remove_file(&cur_obj)?;
-                }
+        if let Err(error) = trash::delete(&cur_obj) {
+            self.popup = Some(Popup::new(
+                "Error",
+                &format!["Failed to delete {} [Error: {}]",cur_obj.display(),error],
+                None
+            ));
+        }
 
-                return Ok(());
-            }));
+        // self.operations
+        //     .push(thread::spawn(move || -> io::Result<()> {
+        //         if cur_obj.is_dir() {
+        //             fs::remove_dir_all(&cur_obj)?;
+        //         } else {
+        //             fs::remove_file(&cur_obj)?;
+        //         }
+
+        //         return Ok(());
+        //     }));
     }
 
     pub fn render<B: Backend>(&mut self, f: &mut Frame<B>) {
