@@ -14,6 +14,8 @@ use tui::{
     Frame,
 };
 
+mod colors;
+
 pub struct Panel {
     state: ListState,
     path: PathBuf,
@@ -133,10 +135,7 @@ impl Panel {
         let mut items: Vec<ListItem> = Vec::new();
 
         for obj in self.items.iter() {
-            let obj_color: Color = match obj.is_dir() {
-                true => Color::Blue,
-                false => Color::White,
-            };
+            let obj_color: Color = colors::get_color(obj);
 
             items.push(
                 ListItem::new(obj.file_name().unwrap().to_str().unwrap().to_string())
