@@ -72,6 +72,24 @@ impl App {
         self.search_str.clear();
     }
 
+    pub fn open(&mut self) {
+        let cur_obj: PathBuf = self.get_cur_panel().get_cur_obj();
+        self.search_str.clear();
+
+        if cur_obj.is_dir() {
+            self.get_cur_panel().open_dir();
+        } else {
+            if let Err(error) = open::that(cur_obj.to_str().unwrap()) {
+                self.popup = Some(Popup::new(
+                    "Error",
+                    format!["Failed to open {} [Error: {}]", cur_obj.display(), error],
+                    None,
+                ));
+                return;
+            };
+        }
+    }
+
     pub fn leave_dir(&mut self) {
         self.get_cur_panel().leave_dir();
         self.search_str.clear();
@@ -194,8 +212,8 @@ impl App {
         if let Err(error) = trash::delete(&cur_obj) {
             self.popup = Some(Popup::new(
                 "Error",
-                format!["Failed to delete {} [Error: {}]",cur_obj.display(),error],
-                None
+                format!["Failed to delete {} [Error: {}]", cur_obj.display(), error],
+                None,
             ));
         }
 

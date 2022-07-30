@@ -65,7 +65,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
                     if app.is_popup() {
                         app.close_popup();
                     } else {
-                        app.open_dir();
+                        app.open();
                     }
                 }
                 KeyCode::Left => app.leave_dir(),
